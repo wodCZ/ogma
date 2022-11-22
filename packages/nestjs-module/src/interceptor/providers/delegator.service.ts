@@ -1,26 +1,37 @@
 import { ContextType, ExecutionContext, Injectable } from '@nestjs/common';
+import { DiscoveryService, Reflector } from '@nestjs/core';
 
 import { OgmaInterceptorServiceOptions } from '../../interfaces';
+import { OGMA_CONTEXT_PARSER } from '../../ogma.constants';
 import { DelegatorContextReturn, LogObject, MetaLogObject } from '../interfaces/log.interface';
-import { GqlInterceptorService } from './gql-interceptor.service';
-import { HttpInterceptorService } from './http-interceptor.service';
-import { RpcInterceptorService } from './rpc-interceptor.service';
-import { WebsocketInterceptorService } from './websocket-interceptor.service';
-
-type Parser = 'httpParser' | 'gqlParser' | 'wsParser' | 'rpcParser';
+import { AbstractInterceptorService } from './abstract-interceptor.service';
 
 @Injectable()
 export class DelegatorService {
+  private readonly parserMap: Map<string, AbstractInterceptorService> = new Map();
   constructor(
-    private readonly httpParser: HttpInterceptorService,
-    private readonly wsParser: WebsocketInterceptorService,
-    private readonly rpcParser: RpcInterceptorService,
-    private readonly gqlParser: GqlInterceptorService,
+    private readonly discoveryService: DiscoveryService,
+    private readonly reflector: Reflector,
   ) {}
 
+  async onModuleInit() {
+    const provders = this.discoveryService.getProviders();
+    provders
+      .filter(
+        (provider) =>
+          !provider.isNotMetatype && this.reflector.get(OGMA_CONTEXT_PARSER, provider.metatype),
+      )
+      .forEach((foundProvider) => {
+        this.parserMap.set(
+          this.reflector.get(OGMA_CONTEXT_PARSER, foundProvider.metatype),
+          foundProvider.instance,
+        );
+      });
+  }
+
   setRequestId(context: ExecutionContext, requestId: string): void {
-    const parser: Parser = this.getParser(context.getType());
-    this[parser].setRequestId(context, requestId);
+    const parser = this.getParser(context.getType());
+    parser.setRequestId(context, requestId);
   }
 
   getContextSuccessString(
@@ -29,7 +40,7 @@ export class DelegatorService {
     startTime: number,
     options: OgmaInterceptorServiceOptions,
   ): DelegatorContextReturn {
-    const parser: Parser = this.getParser(context.getType());
+    const parser = this.getParser(context.getType());
     const { meta, ...logObject } = this.getContextString({
       method: 'getSuccessContext',
       data,
@@ -41,23 +52,8 @@ export class DelegatorService {
     return { meta, log: this.getStringOrObject(logObject, { json: options.json }) };
   }
 
-  private getParser(type: ContextType | 'graphql'): Parser {
-    let parser: Parser;
-    switch (type) {
-      case 'http':
-        parser = 'httpParser';
-        break;
-      case 'graphql':
-        parser = 'gqlParser';
-        break;
-      case 'ws':
-        parser = 'wsParser';
-        break;
-      case 'rpc':
-        parser = 'rpcParser';
-        break;
-    }
-    return parser;
+  private getParser(type: ContextType | 'graphql'): AbstractInterceptorService {
+    return this.parserMap.get(type);
   }
 
   getContextErrorString(
@@ -91,9 +87,9 @@ export class DelegatorService {
     context: ExecutionContext;
     startTime: number;
     options: OgmaInterceptorServiceOptions;
-    parser: Parser;
+    parser: AbstractInterceptorService;
   }): MetaLogObject {
-    return this[parser][method](data, context, startTime, options);
+    return parser[method](data, context, startTime, options);
   }
 
   private getStringOrObject(data: LogObject, options: { json: boolean }): string | LogObject {

@@ -94,12 +94,16 @@ for (const { server, transport, options, protocol, parser } of [
     rpcServer: undefined,
   });
   RpcSuite.before(async (context) => {
-    const modRef = await createTestModule(RpcServerModule, {
-      service: serviceOptionsFactory(server),
-      interceptor: {
-        rpc: parser,
+    const modRef = await createTestModule(
+      RpcServerModule,
+      {
+        service: serviceOptionsFactory(server),
+        interceptor: {
+          rpc: parser,
+        },
       },
-    });
+      [parser],
+    );
     const rpcServer = modRef.createNestMicroservice<MicroserviceOptions>({
       transport,
       options,

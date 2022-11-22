@@ -56,10 +56,9 @@ for (const { adapter, server, parser } of [
     logs: [],
   });
   HttpSuite.before(async (context) => {
-    const modRef = await createTestModule(HttpServerModule, {
-      service: serviceOptionsFactory(server),
-      interceptor: { http: parser },
-    });
+    const modRef = await createTestModule(HttpServerModule, serviceOptionsFactory(server), [
+      parser,
+    ]);
     context.app = modRef.createNestApplication(adapter);
     const interceptor = context.app.get(OgmaInterceptor);
     await context.app.listen(0);

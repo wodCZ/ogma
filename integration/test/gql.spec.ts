@@ -46,12 +46,11 @@ for (const { adapter, server, parser, driver } of [
     logs: [],
   });
   GqlParserSuite.before(async (context) => {
-    const modRef = await createTestModule(GqlModule.forFeature(driver), {
-      service: serviceOptionsFactory(`GraphQL ${server}`),
-      interceptor: {
-        gql: parser,
-      },
-    });
+    const modRef = await createTestModule(
+      GqlModule.forFeature(driver),
+      serviceOptionsFactory(`GraphQL ${server}`),
+      [parser],
+    );
     context.app = modRef.createNestApplication(adapter);
     const interceptor = context.app.get(OgmaInterceptor);
     await context.app.listen(0);
